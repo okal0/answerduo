@@ -1,0 +1,1 @@
+{"name":"interviewduo","private":true,"type":"module","scripts":{"start":"node server.ts","test":"node --test test.ts"},"engines":{"node":">=24"},"dependencies":{"katex":"^0.19.1","mammoth":"^1.13.0","pdfjs-dist":"^6.5.438","qrcode":"^1.5.4","ws":"^8.18.3"}}
