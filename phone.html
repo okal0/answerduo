@@ -1,1 +1,23 @@
-<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>InterviewDuo · Interview workspace</title><link rel="stylesheet" href="/style.css"><header><div class="brand"><i class="logo"><b></b><b></b><b></b><b></b></i>InterviewDuo</div><span class="divider"></span><span>Interview workspace</span><small>PRIVATE SESSION</small></header><main class="phone"><span class="pill" id="connection">Connecting…</span><h1>Interview companion</h1><section class="panel reading"><span class="eyebrow">CURRENT QUESTION</span><h2 id="question">Waiting for a question</h2><span class="eyebrow" id="answer-label">ANSWER</span><div id="answer">Tap an action below when you’re ready.</div></section><details class="panel"><summary>Live transcript</summary><p id="transcript"></p></details><p id="notice" role="status"></p><div class="actions"><button class="primary" id="ask" disabled>Answer question</button><button id="analyze" disabled>Analyze screen</button></div></main><script defer src="/katex.js"></script><script type="module" src="/app.js"></script></html>
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>AnswerDuo · Live interview</title>
+<link rel="stylesheet" href="/style.css">
+<body class="companion-page">
+<header><a class="brand" href="/" aria-label="AnswerDuo home"><i class="logo"><b></b><b></b><b></b><b></b></i>Answer<span>Duo</span></a><span class="pill" id="connection">Connecting…</span></header>
+<main class="phone">
+  <section class="question-bar" aria-labelledby="question-label">
+    <span class="eyebrow" id="question-label">Last question</span>
+    <h1 id="last-question">Waiting for a question…</h1>
+  </section>
+  <div id="transcript" tabindex="0" aria-label="Live interview conversation"></div>
+  <p id="notice" role="status"></p>
+  <div class="actions">
+    <button type="button" id="prompt-toggle" aria-pressed="true" aria-label="Auto-scroll" title="Pause auto-scroll">Ⅱ</button>
+    <button class="primary" id="ask" disabled>Get answer</button>
+    <button id="analyze" disabled>Analyze screen</button>
+  </div>
+</main>
+<script defer src="/katex.js"></script><script type="module" src="/app.js"></script>
+</body></html>

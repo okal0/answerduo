@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import WebSocket,{WebSocketServer} from 'ws';
 for (const name of ['openai','gemini']) test(name+' private two-device session lifecycle',{timeout:15000},async(t)=>{
-  process.env.NODE_ENV='test';process.env.PUBLIC_ORIGIN='http://localhost:3000';
+  process.env.ACCOUNTS_DB=':memory:';process.env.NODE_ENV='test';process.env.PUBLIC_ORIGIN='http://localhost:3000';
   const provider=new WebSocketServer({port:0,host:'127.0.0.1'});await once(provider,'listening');
   process.env.TEST_REALTIME_URL='ws://localhost:'+provider.address().port;
   const audio=[];provider.on('connection',ws=>ws.on('message',raw=>{const m=JSON.parse(raw);
@@ -24,10 +24,7 @@ for (const name of ['openai','gemini']) test(name+' private two-device session l
   }));
   const realFetch=globalThis.fetch;const requests=[];
   const selected='Design a caching layer. Assume 100 MB.';
-  const output=()=>requests.length===1
-    ? ['{"ques','tion":'+JSON.stringify(selected)+'}\nCache ','repeated reads.']
-    : requests.length===5 ? ['{"question":','null}']
-    : requests.length===3||requests.length===4
+  const output=()=>requests.length===3||requests.length===4
     ? ['```python\nprint(42)\n```\n','Explanation\nPrints the result.\nWalkthrough\nThe literal 42 is printed as 42.']
     : ['Cache ','repeated reads.'];
   t.mock.method(globalThis,'fetch',async(url,options)=>{
@@ -75,7 +72,7 @@ for (const name of ['openai','gemini']) test(name+' private two-device session l
   assert.ok(JSON.stringify(requests[0]).includes('Fixture: maintained an inventory service.'));
   assert.ok(!JSON.stringify(phone.messages).includes('Fixture: maintained an inventory service.'));
   phone.ws.close();await once(phone.ws,'close');phone=await open(pair.credential);await wait(()=>phone.messages.some(m=>m.answer==='Cache repeated reads.'&&m.question===selected));
-  await action('Analyze screen');assert.ok(phone.messages.some(m=>m.notice==='Select a window on your laptop'));
+  await action('Analyze screen');assert.ok(phone.messages.some(m=>m.notice==='Select a window on your computer'));
   for(const frame of ['AA','BB'])await action('Analyze screen','data:image/jpeg;base64,'+frame);
   assert.equal(requests.length,4);
   assert.ok(!JSON.stringify(requests.slice(1)).includes('Fixture: maintained an inventory service.'));
@@ -83,10 +80,47 @@ for (const name of ['openai','gemini']) test(name+' private two-device session l
   if(name==='gemini')assert.equal(requests[3].contents[0].parts[1].inlineData.data,'BB');
   await action('Answer question');
   assert.ok(phone.messages.some(m=>m.previewQuestion===selected));
-  assert.equal(requests.length,6);
+  assert.equal(requests.length,5);
   assert.equal(phone.messages.at(-1).question,selected);
   assert.equal(phone.messages.at(-1).answer,'Cache repeated reads.');
   assert.ok(!phone.messages.some(m=>m.answer?.includes('{"ques')));
   const closed=once(phone.ws,'close');send(host,{type:'end'});assert.equal((await closed)[0],4001);
   const revoked=await open(pair.credential);assert.equal((await once(revoked.ws,'close'))[0],4003);
+});
+
+test('Gemini retries a timeout before text and finishes on STOP while the connection stays open',{timeout:3000},async t=>{
+  const {answer}=await import('./session-logic.ts');
+  let calls=0;
+  t.mock.method(globalThis,'fetch',async(url)=>{
+    assert.ok(String(url).includes(calls===0?'gemini-3.5-flash-lite:':'gemini-3.5-flash:'));
+    if(++calls===1)throw new DOMException('The operation was aborted due to timeout','TimeoutError');
+    const event={candidates:[{content:{parts:[{text:'Use a bounded cache.'}]},finishReason:'STOP'}]};
+    return new Response(new ReadableStream({start(stream){
+      stream.enqueue(new TextEncoder().encode('data: '+JSON.stringify(event)+'\n\n'));
+    }}));
+  });
+  const room={provider:'gemini',key:'fixture',context:'How would you cache this?',request:'one',state:{action:'Answer question',answer:'',notice:''}};
+  await answer(room,{request:'one'},()=>{});
+  assert.equal(calls,2);
+  assert.equal(room.state.answer,'Use a bounded cache.');
+  assert.equal(room.state.notice,'');
+  assert.equal(room.state.action,'');
+});
+
+test('silent first Gemini request is aborted and the same tap receives the fallback answer',{timeout:10000},async t=>{
+  const {answer}=await import('./session-logic.ts');
+  let calls=0;
+  t.mock.method(globalThis,'fetch',async(url,options)=>{
+    calls++;
+    if(String(url).includes('flash-lite:')){
+      return new Promise((_,reject)=>options.signal.addEventListener('abort',()=>reject(options.signal.reason),{once:true}));
+    }
+    const event={candidates:[{content:{parts:[{text:'Start with a baseline.'}]},finishReason:'STOP'}]};
+    return new Response('data: '+JSON.stringify(event)+'\n\n');
+  });
+  const room={provider:'gemini',key:'fixture',context:'How would you start?',request:'first',state:{action:'Answer question',answer:'',notice:''}};
+  await answer(room,{request:'first'},()=>{});
+  assert.equal(calls,2);
+  assert.equal(room.state.answer,'Start with a baseline.');
+  assert.equal(room.state.notice,'');
 });
