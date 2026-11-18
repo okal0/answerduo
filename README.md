@@ -1,6 +1,50 @@
-# AnswerDuo interview workspace
+# AnswerDuo
 
-AnswerDuo pairs a Chrome computer host with a mobile browser. Run one long-lived Node.js 24 server. Session state and keys live in that process. Restarting it ends every session.
+**Live site: [app.answerduo.workers.dev](https://app.answerduo.workers.dev)**
+
+AnswerDuo is a browser-based, two-device AI interview assistant. Share meeting audio on your computer, pair your phone with a QR code, and read live transcripts and suggested answers on the phone. The app is deployed on **Cloudflare Workers with SQLite-backed Durable Objects**. No desktop installation or local server is needed to use the live site.
+
+## Try the deployed app
+
+1. Open [AnswerDuo](https://app.answerduo.workers.dev) on your computer and enter the [workspace](https://app.answerduo.workers.dev/app). Chrome or Edge is recommended for audio capture.
+2. Choose OpenAI or Google Gemini and enter your own provider API key.
+3. Optionally add your CV or background notes, target role, preferred coding language and answer language.
+4. Select your meeting tab with tab audio enabled, or share computer audio where your browser and operating system support it. Check the input meter. Optionally select a visual source for screen analysis.
+5. Start a session and scan its QR code with your phone. Both devices need internet access; they do not need to be on the same Wi-Fi network.
+6. Tap **Answer question** on the phone for a suggested answer, or **Analyze screen** to analyze the selected visual source. Keep the computer page open and audio sharing active throughout the session.
+
+**Bring your own key:** AnswerDuo does not include AI credits. Your selected provider may charge your API account for transcription and answer generation, including during the free trial. You are responsible for those charges and your provider's usage limits.
+
+## Available now
+
+- Live transcription and streamed answers on a paired phone.
+- Answers organized into **Quick Answer** and **Full Details**, informed by optional CV/background notes. Missing personal experience is represented as a labeled sample scenario rather than invented candidate history.
+- On-demand screen analysis with formatted code, explanation, walkthrough and complexity where relevant.
+- Optional PDF, DOCX and TXT background imports and preparation settings.
+- A **20-minute guest preview**, followed by a **seven-day registered free trial** with no credit card required.
+- Account sign-in and a protected administrator dashboard for usage and visitor metrics.
+
+Payments and license activation are postponed. Email verification and self-service password recovery are not implemented. The deployed app uses Cloudflare's Free plan and is subject to its quotas; provider model access and quotas are separate.
+
+## Technology
+
+| Layer | Technology |
+| --- | --- |
+| Interface | HTML, CSS and TypeScript; no frontend framework |
+| Production backend | Cloudflare Workers and Durable Objects |
+| Account storage | SQLite inside the AccountStore Durable Object |
+| Live communication | WebSockets |
+| Audio capture | Browser screen-sharing and Web Audio APIs |
+| AI providers | OpenAI and Google Gemini |
+| Local backend | Node.js 24 and SQLite |
+| Build and deployment | esbuild and Wrangler |
+| Tests | Node.js test runner, Miniflare/workerd and browser tests |
+
+## Privacy and session data
+
+API keys are sent over HTTPS to the backend to authenticate provider requests. They are held in session memory, not saved in the application's database or embedded in pairing links. They are **not exclusively local to your computer**: the backend and selected provider receive them as needed for authentication.
+
+CV text, transcripts, screenshots and answers are held in session memory and sent to the selected provider as needed for the requested action. Account records, trial usage and visitor metrics persist separately in Cloudflare's database. Local development uses a separate SQLite database and does not automatically copy its guest accounts or analytics to production. See **Data flow** below for details.
 
 ## Run locally
 
@@ -19,7 +63,7 @@ Open http://localhost:3000 for the public site, or http://localhost:3000/app for
 2. Stop the local Node server. In PowerShell, set `$env:PUBLIC_ORIGIN='https://YOUR-TUNNEL.trycloudflare.com'` using the actual origin without a trailing slash. Run `node server.ts` again.
 3. Open **that HTTPS origin on the computer**. The host and companion use the same origin for HTTP and WebSockets. A phone on cellular can scan the QR directly. A localhost QR only works on the computer.
 
-## HTTPS deployment
+## Alternative self-hosting with Node.js
 
 On a public Linux host with Node.js 24, pnpm and Caddy, point your domain's DNS to the host and allow inbound TCP ports 80 and 443. Copy this project there, install dependencies and run the server under your service manager with the following command (replace the example domain).
 
@@ -48,9 +92,9 @@ interview.example.com {
 
 The optional **CV or background notes** field accepts up to 20,000 characters on the computer. Import a text-based PDF, DOCX or UTF-8 TXT up to 5 MB, or type directly. The computer extracts and appends editable text locally.  Scanned PDFs require text extraction elsewhere. You can edit or clear it between answers. The host syncs notes and preparation settings to session memory on the relay. Tapping **Get answer** sends them to the selected provider with the transcript. The phone receives the generated answer, which may reference the notes. The raw notes stay out of pairing links, session snapshots and screen-analysis requests.
 
-The computer sends its provider key over HTTPS to the trusted Node server for validation and again at session start. For OpenAI sessions, the server authenticates to OpenAI with a Bearer header. It checks access to `gpt-4.1-mini` using the Models API. Billing and transcription access are exercised by actual requests. No key is embedded in pairing links, persisted by the app or intentionally logged.
+The computer sends its provider key over HTTPS to the trusted backend for validation and again at session start. For OpenAI sessions, the server authenticates to OpenAI with a Bearer header. It checks access to `gpt-4.1-mini` using the Models API. Billing and transcription access are exercised by actual requests. No key is embedded in pairing links, persisted by the app or intentionally logged.
 
-Chrome captures meeting **tab audio**, downmixes it to mono PCM16 at 24 kHz and sends it over the authenticated host WebSocket. In OpenAI sessions the server forwards chunks to OpenAI Realtime using `gpt-live-transcribe`. The host commits turns after about 400 ms of quiet following speech or after 20 seconds. The phone receives transcript text. Selecting a visual source creates an independent capture stream on the computer. Each analysis command samples its current frame into a new JPEG and sends it through the trusted server to the Responses API. Both OpenAI actions use `gpt-4.1-mini`, with streaming and `store:false`. The server and the selected provider receive transcript context and, for analysis, the requested image. OpenAI's account-level data controls also apply.
+The browser captures shared meeting or computer audio, downmixes it to mono PCM16 at 24 kHz and sends it over the authenticated host WebSocket. In OpenAI sessions the server forwards chunks to OpenAI Realtime using `gpt-live-transcribe`. The host commits turns after about 400 ms of quiet following speech or after 20 seconds. The phone receives transcript text. Selecting a visual source creates an independent capture stream on the computer. Each analysis command samples its current frame into a new JPEG and sends it through the trusted server to the Responses API. Both OpenAI actions use `gpt-4.1-mini`, with streaming and `store:false`. The server and the selected provider receive transcript context and, for analysis, the requested image. OpenAI's account-level data controls also apply.
 
 For Google Gemini, use a [Gemini API key from Google AI Studio](https://aistudio.google.com/apikey). The relay validates the key against the Flash model, converts the audio to 16 kHz mono and forwards it to `gemini-3.5-transcribe-live`. Interim captions update until Google returns a final utterance. Get answer streams from `gemini-3.5-flash-lite`. If that model is unavailable or sends no text within six seconds, the relay makes one fallback attempt with `gemini-3.5-flash`. Screen analysis uses `gemini-3.5-flash`. Screen analysis includes a fresh inline JPEG. Google receives the key in the REST authentication header and in the server-to-Google Live WebSocket handshake URL. Keep outbound request URLs out of proxy logs. Model availability and quota depend on your Google project. [Live transcription](https://ai.google.dev/gemini-api/docs/live-api/live-transcribe) · [Streaming generation](https://ai.google.dev/api/generate-content#method:-models.streamgeneratecontent)
 
@@ -62,7 +106,7 @@ The server exchanges a single-use fragment token for a separate phone credential
 
 ## Accounts, guest trials and administration
 
-Account and traffic data are stored in SQLite at `data/accounts.sqlite`. Set `ACCOUNTS_DB` to an absolute persistent location in deployment. Run one Node process. Back up this database. Interview transcripts, provider keys, screenshots and CV text continue to live in memory.
+In local Node.js development, account and traffic data are stored in SQLite at `data/accounts.sqlite`. Production uses the Cloudflare AccountStore database described below. Set `ACCOUNTS_DB` to an absolute persistent location in deployment. Run one Node process. Back up this database. Interview transcripts, provider keys, screenshots and CV text continue to live in memory.
 
 Anonymous guests receive 20 minutes of cumulative session time. Pauses within an open session count; time between sessions does not. After the preview ends, the computer directs guests to registration. Registering starts a fresh seven-calendar-day free trial with no credit card required; the deadline is stored against the account and does not renew on login. Registering during a guest session extends its deadline. Existing guest identities receive a fresh preview once through the `guest-preview-v1` migration; existing registered trial deadlines are preserved. After the registered trial expires, access requires a license; purchasing and activation remain unimplemented. Admin access is exempt. Clearing cookies can restart the guest preview. Email verification is not implemented, so multiple registrations remain possible. Guest identity counts include expired identities and deployment tests; they are separate from unique browser visitors.
 
@@ -70,7 +114,7 @@ Create the owner administrator locally using PowerShell. The command reads the p
 
 ```powershell
 $adminEmail = Read-Host 'Admin email'
-$adminPassword = Read-Host 'Admin password (12 characters minimum)' -AsSecureString
+$adminPassword = Read-Host 'Admin password (8 characters minimum)' -AsSecureString
 $plainPassword = [System.Net.NetworkCredential]::new('', $adminPassword).Password
 @{email=$adminEmail;password=$plainPassword} | ConvertTo-Json -Compress | node create-admin.ts
 $plainPassword = $null
@@ -96,7 +140,7 @@ Before public launch, test a real sandbox checkout, renewal, cancellation and a 
 
 ## Cloudflare Free deployment
 
-Live URL — https://app.answerduo.workers.dev
+Live URL — [app.answerduo.workers.dev](https://app.answerduo.workers.dev)
 
 The Node.js server remains available for local development. The Cloudflare build uses a Worker for routing/static assets, a SQLite-backed AccountStore Durable Object for account and trial data, and one InterviewRoom Durable Object per capture session. The deployment requires neither a paid database nor a container.
 
